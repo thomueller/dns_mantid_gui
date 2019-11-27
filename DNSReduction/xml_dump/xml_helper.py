@@ -8,18 +8,16 @@
 helper module for dns xml data
 """
 from __future__ import (absolute_import, division, print_function)
-import xml.etree.ElementTree as etree
-from xml.dom import minidom
-from collections import OrderedDict
- ## also works with non ordered dictonaries
- ## but then xml files will have unordered structure
 
-### just needed for xml file attributes
+from collections import OrderedDict
 import sys
 import time
 import platform
-from mantidqt.gui_helper import get_qapplication
 
+import xml.etree.ElementTree as etree
+from xml.dom import minidom
+
+from mantidqt.gui_helper import get_qapplication
 
 #### fancy stuff to get mantid versions and workbench or mantidplot
 try:
@@ -32,7 +30,7 @@ SCRIPT_EXEC_METHOD = 'exec'
 try:
     import mantidplot
     SCRIPT_EXEC_METHOD = 'mantidplot'
-except(ImportError, ImportWarning):
+except (ImportError, ImportWarning):
     # are we running workbench
     if 'workbench' in sys.modules:
         SCRIPT_EXEC_METHOD = 'async'
@@ -42,20 +40,22 @@ app, within_mantid = get_qapplication()
 ## header is written to xml files at creation,
 ## it is also read and files are checked for instrument name = DNS
 ## will not be updated during program execution
-xml_header = OrderedDict([('instrument_name', 'DNS'), ## hardcoded if we are not in mantid
-                          ('facility_name', 'MLZ'),
-                          ('timestamp_xml_save', time.ctime()),
-                          ('python_version', sys.version),
-                          ('platform', platform.system()),
-                          ('architecture', str(platform.architecture())),
-                          ('script_exec_method', SCRIPT_EXEC_METHOD),
-                          ('mantid_version', mantid_version),
-                          ('within_mantid', within_mantid),
-                         ])
+xml_header = OrderedDict([
+    ('instrument_name', 'DNS'),  ## hardcoded if we are not in mantid
+    ('facility_name', 'MLZ'),
+    ('timestamp_xml_save', time.ctime()),
+    ('python_version', sys.version),
+    ('platform', platform.system()),
+    ('architecture', str(platform.architecture())),
+    ('script_exec_method', SCRIPT_EXEC_METHOD),
+    ('mantid_version', mantid_version),
+    ('within_mantid', within_mantid),
+])
+
 
 def convert_type(value, mytype):
     """
-    returns a variable of the type described by string :mytype from the string :value
+    Return a variable of the type described by string :mytype from the string :value
     """
     if mytype == 'bool':
         return value == 'True'
@@ -64,48 +64,20 @@ def convert_type(value, mytype):
     if mytype == 'float':
         return float(value)
     if mytype.endswith('list'):
-        return [convert_type(x, mytype=mytype.split('list')[0]) for x in value.strip('[]').split(',')]
+        return [
+            convert_type(x, mytype=mytype.split('list')[0])
+            for x in value.strip('[]').split(',')
+        ]
     if mytype == 'emptylist':
         return []
     if mytype == 'None':
         return None
     return value
 
-def return_type(value):
-    """
-    returns a string describing the type of :value
-    """
-    if isinstance(value, bool): ## bool is subtype of int so check first for bool
-        return 'bool'
-    if isinstance(value, int):
-        return 'int'
-    if isinstance(value, float):
-        return 'float'
-    if isinstance(value, list):
-        if value:
-            return ''.join([return_type(value[0]), 'list'])
-        return 'emptylist'
-    if value is None:
-        return 'None'
-    return 'str'
-
-def xml_to_dict(elm, dictionary):
-    """
-    returns a dictionary for given xml tree element,
-    """
-    children = list(elm)
-    if children:
-        new_dict = OrderedDict()
-        dictionary.update({elm.tag : new_dict})
-        for child in children:
-            xml_to_dict(child, new_dict)
-    else:
-        dictionary.update({elm.tag: convert_type(elm.text, elm.get('type', 'str'))})
-    return dictionary
 
 def dict_to_xml(dictionary, node=None):
     """
-    returns an xml element for a given dictionary
+    Return an xml element for a given dictionary
     """
     if node is None:
         node = etree.Element('document')
@@ -120,11 +92,13 @@ def dict_to_xml(dictionary, node=None):
             sub.set('type', return_type(value))
     return node
 
+
 def dic_to_xml_file(param_dict, filename):
     """
-    writes :dictionary to a xml file :filename
-    dictionary can contain None, str, int, float and list of them, or dicionaries
-    other types are converted to str and not converted back if you try to read them
+    Write :dictionary to a xml file :filename
+    dictionary can contain bool, None, str, int, float and list of them,
+    or dicionaries, other types are converted to str and not converted back
+    if you try to read them
     """
     dictionary = OrderedDict()
     dictionary['xml_header'] = xml_header
@@ -138,9 +112,30 @@ def dic_to_xml_file(param_dict, filename):
         except IOError:
             print('Error writing file')
 
+
+def return_type(value):
+    """
+    Return a string describing the type of :value
+    """
+    if isinstance(value,
+                  bool):  ## bool is subtype of int so check first for bool
+        return 'bool'
+    if isinstance(value, int):
+        return 'int'
+    if isinstance(value, float):
+        return 'float'
+    if isinstance(value, list):
+        if value:
+            return ''.join([return_type(value[0]), 'list'])
+        return 'emptylist'
+    if value is None:
+        return 'None'
+    return 'str'
+
+
 def xml_file_to_dict(filename):
     """
-    returns a dictionary from a given :filename
+    Return a dictionary from a given :filename
     works only with structures written by dic_to_xml_file
     """
     if filename:
@@ -154,3 +149,19 @@ def xml_file_to_dict(filename):
             dictionary = xml_to_dict(tree.getroot(), {}).get('document', {})
             return dictionary
     return None
+
+
+def xml_to_dict(elm, dictionary):
+    """
+    Return a dictionary for given xml tree element,
+    """
+    children = list(elm)
+    if children:
+        new_dict = OrderedDict()
+        dictionary.update({elm.tag: new_dict})
+        for child in children:
+            xml_to_dict(child, new_dict)
+    else:
+        dictionary.update(
+            {elm.tag: convert_type(elm.text, elm.get('type', 'str'))})
+    return dictionary

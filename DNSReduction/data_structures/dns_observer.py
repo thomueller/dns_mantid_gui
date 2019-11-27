@@ -10,12 +10,16 @@ and are updated by DNSReductionGui_presenter
 """
 from __future__ import (absolute_import, division, print_function)
 from collections import OrderedDict
+
 from qtpy.QtCore import Signal, QObject
+
 from mantidqt.gui_helper import get_qapplication
+
 
 class DNSObserver(QObject):
     """
-    common class definition for DNS Observers, they have their own parameter dictionary and can have a view
+    common class definition for DNS Observers,
+    they have their own parameter dictionary and can have a view
     """
     def __init__(self, parent, name):
         super(DNSObserver, self).__init__()
@@ -31,6 +35,7 @@ class DNSObserver(QObject):
     sig_request_from_abo = Signal()
 
     def update(self, param_dict):
+        """Updating the own dictionary from ParameterAbo"""
         if self.modus != self.parent.modus.name:
             self.modus = self.parent.modus.name
             self.sig_modus_changed.emit()
@@ -42,6 +47,7 @@ class DNSObserver(QObject):
         self.view.set_state(self.param_dict[self.name])
 
     def get_option_dict(self):
+        """Return own options from view"""
         if self.view is not None:
             self.own_dict.update(self.view.get_state())
         return self.own_dict
@@ -50,6 +56,7 @@ class DNSObserver(QObject):
         self.view.raise_error(message, critical, info)
 
     def process_request(self):
+        """Main presenter can request data from DNSObservers"""
         pass
 
     def tab_got_focus(self):

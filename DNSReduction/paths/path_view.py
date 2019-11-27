@@ -1,6 +1,6 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2018 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
@@ -12,7 +12,6 @@ from os.path import expanduser
 
 from qtpy.QtWidgets import QFileDialog
 from qtpy.QtCore import Signal
-
 
 from DNSReduction.data_structures.dns_view import DNSView
 
@@ -32,6 +31,17 @@ class DNSPath_view(DNSView):
         self.name = "Paths"
         self._content = load_ui(__file__, 'path.ui', baseinstance=self)
 
+        self._mapping = {
+            'data_dir': self._content.lE_data_dir,
+            'logbook_dir': self._content.lE_logbook_dir,
+            'psd_dir': self._content.lE_psd_dir,
+            'user': self._content.lE_user,
+            'prop_nb': self._content.lE_prop_nb,
+            'standards_dir': self._content.lE_standards_dir,
+            'script_dir': self._content.lE_script_dir,
+        }
+
+        ## connect signals
         self._content.pB_file_data.clicked.connect(self.filedialog)
         self._content.pB_file_psd.clicked.connect(self.filedialog)
         self._content.pB_file_logbook.clicked.connect(self.filedialog)
@@ -39,52 +49,14 @@ class DNSPath_view(DNSView):
         self._content.pB_file_script.clicked.connect(self.filedialog)
         self._content.pB_clear.clicked.connect(self.clear_directories)
 
-        # there is a scirpt to generate the mapping, keep it explicit for readability
-        self._mapping = {'data_dir': self._content.lE_data_dir,
-                         'logbook_dir': self._content.lE_logbook_dir,
-                         'psd_dir': self._content.lE_psd_dir,
-                         'user': self._content.lE_user,
-                         'prop_nb': self._content.lE_prop_nb,
-                         'standards_dir': self._content.lE_standards_dir,
-                         'script_dir' :  self._content.lE_script_dir,
-                        }
-        ##mapper = mapping_creator(self._content
-        ##for testing
-        self._content.lE_data_dir.setText('C:/Daten/python/dns_mantid_gui/data2')
-        self._content.lE_data_dir.setText('C:/data/p13656')
+    ### for testing
+    #self._content.lE_data_dir.setText(
+    #    'C:/Daten/python/dns_mantid_gui/data2')
+    #self._content.lE_data_dir.setText('C:/data/p13656')
 
 
+##Signals
     sig_data_path_set = Signal(str)
-
-    def get_path(self, pathtype):
-        #print(self.mapping[pathtype].text())
-        return self._mapping[pathtype].text()
-
-    def set_path(self, pathtype, directory):
-        self._mapping[pathtype].setText(directory)
-        return
-
-    def set_prop_number(self, prop_nb):
-        self._mapping['prop_nb'].setText(prop_nb)
-
-    def get_prop_number(self):
-        self._mapping['prop_nb'].text()
-
-    def set_user(self, user):
-        self._mapping['user'].setText(user)
-
-    def get_user(self):
-        return self._mapping['user'].text()
-
-    def clear_directories(self):
-        self.set_user('')
-        self.set_prop_number('')
-        self.set_path('logbook_dir', '')
-        self.set_path('data_dir', '')
-        self.set_path('standards_dir', '')
-        self.set_path('script_dir', '')
-        self.set_path('psd_dir', '')
-
 
     def filedialog(self):
         """
@@ -97,9 +69,7 @@ class DNSPath_view(DNSView):
         else:
             startpath = expanduser("~")
         dir_name = QFileDialog.getExistingDirectory(
-            self,
-            "Select folder",
-            startpath,
+            self, "Select folder", startpath,
             QFileDialog.ShowDirsOnly | QFileDialog.DontUseNativeDialog)
         if dir_name:
             if sender == 'pB_file_data':
@@ -122,3 +92,32 @@ class DNSPath_view(DNSView):
             elif sender == 'pB_file_script':
                 self.set_path('script_dir', dir_name)
         return dir_name
+
+    def clear_directories(self):
+        self.set_user('')
+        self.set_prop_number('')
+        self.set_path('logbook_dir', '')
+        self.set_path('data_dir', '')
+        self.set_path('standards_dir', '')
+        self.set_path('script_dir', '')
+        self.set_path('psd_dir', '')
+
+    def get_path(self, pathtype):
+        return self._mapping[pathtype].text()
+
+    def get_prop_number(self):
+        return self._mapping['prop_nb'].text()
+
+    def get_user(self):
+        return self._mapping['user'].text()
+
+    def set_path(self, pathtype, directory):
+        self._mapping[pathtype].setText(directory)
+        return
+
+    def set_prop_number(self, prop_nb):
+        self._mapping['prop_nb'].setText(prop_nb)
+        return
+
+    def set_user(self, user):
+        self._mapping['user'].setText(user)

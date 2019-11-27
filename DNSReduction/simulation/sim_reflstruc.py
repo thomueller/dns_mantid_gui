@@ -1,11 +1,20 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon May  6 15:44:54 2019
+# Mantid Repository : https://github.com/mantidproject/mantid
+#
+# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
 
-@author: thomasm
+#     NScD Oak Ridge National Laboratory, European Spallation Source
+#     & Institut Laue - Langevin
+# SPDX - License - Identifier: GPL - 3.0 +
+"""
+Reflection data structure for DNS simulation
 """
 from __future__ import (absolute_import, division, print_function)
+
+
 class SimReflStruc(object):
+    """
+    Reflection data structure for DNS simulation
+    """
     def __init__(self):
         super(SimReflStruc, self).__init__()
         self.hkl = None

@@ -9,6 +9,8 @@ DNS Observer Class, they share a common data model DNSReductionGui_model
 and are updated by DNSReductionGui_presenter
 """
 from __future__ import (absolute_import, division, print_function)
+
+
 class DNSObsModel(object):
     """
     Defines a model for DNS Observers, so far only used for Simulation Observer

@@ -8,6 +8,8 @@
 Custum Tree Item for DNS which is either a Scan or a File in DnsTreeModel
 """
 from __future__ import (absolute_import, division, print_function)
+
+
 class DNSTreeItem(object):
     """
     Custom Tree Item Class for DNS which is either a Scan or a File in DnsTreeModel
@@ -24,13 +26,13 @@ class DNSTreeItem(object):
 
     def appendChild(self, item):
         self.child_items.append(item)
+        return item
 
     def child(self, row):
         return self.child_items[row]
 
     def removeChild(self, row):
         self.child_items.pop(row)
-
 
     def childCount(self):
         return len(self.child_items)
@@ -61,12 +63,8 @@ class DNSTreeItem(object):
 
     def row(self):
         if self.parent_item:
-            try: ## I am not sure why this is necesarry, somewhere I am trying to access deleted childs
-                return self.parent_item.child_items.index(self)
-            except ValueError:
-                return 0
+            return self.parent_item.child_items.index(self)
         return 0
-
 
     def setChecked(self, checked=2):
         self._checkstate = checked

@@ -9,15 +9,17 @@ Common Class for DNS Views - supports easy setting and getting of values
 """
 from __future__ import (absolute_import, division, print_function)
 from collections import OrderedDict
+
 from qtpy.QtWidgets import QWidget, QDoubleSpinBox, QLineEdit, QCheckBox
 from qtpy.QtWidgets import QSpinBox, QRadioButton, QGroupBox, QMessageBox, QSlider, QComboBox
 from qtpy.QtCore import Qt
+
 from mantidqt.gui_helper import get_qapplication
+
 app, within_mantid = get_qapplication()
 
+
 class DNSView(QWidget):
-
-
     def __init__(self, parent):
         super(DNSView, self).__init__(parent)
         self.parent = parent
@@ -26,9 +28,10 @@ class DNSView(QWidget):
         self._mapping = {}
         self.error_dialog = None
         self.within_mantid = within_mantid
+
     def set_single_state(self, target_object, value):
         """
-         sets widget value independent of type
+         Setting widget value independent of type
         """
         if isinstance(target_object, QDoubleSpinBox):
             target_object.setValue(float(value))
@@ -41,18 +44,20 @@ class DNSView(QWidget):
         elif isinstance(target_object, QRadioButton):
             target_object.setChecked(value)
         elif isinstance(target_object, QComboBox):
-            index = target_object.findText(value, Qt.MatchFixedString) ### crapy workaround for Qt4 compability
+            index = target_object.findText(
+                value,
+                Qt.MatchFixedString)  ### crapy workaround for Qt4 compability
             if index >= 0:
                 target_object.setCurrentIndex(index)
         elif isinstance(target_object, QSlider):
             target_object.setValue(value)
-        elif  isinstance(target_object, QGroupBox):
+        elif isinstance(target_object, QGroupBox):
             if target_object.isCheckable():
                 target_object.setChecked(value)
 
     def get_single_state(self, target_object):
         """
-        returns widget value independent of type
+        Returning of widget value independent of type
         """
         if isinstance(target_object, QDoubleSpinBox):
             return target_object.value()
@@ -68,31 +73,36 @@ class DNSView(QWidget):
             return target_object.currentText()
         if isinstance(target_object, QSlider):
             return target_object.value()
-        if  isinstance(target_object, QGroupBox):
+        if isinstance(target_object, QGroupBox):
             if target_object.isCheckable():
                 return target_object.isChecked()
         return None
 
     def get_state(self):
         """
-        returns a dictionary with the names of the widgets as keys and the values
+        Retuning of a dictionary with the names of the widgets as keys and the values
         """
         state_dict = OrderedDict()
         for key, target_object in self._mapping.items():
             state = self.get_single_state(target_object)
-            if state is not None: ## pushbuttons for example are not defined in the get function
+            if state is not None:  ## pushbuttons for example are not defined in the get function
                 state_dict[key] = state
         return state_dict
 
     def set_state(self, state_dict):
         """
-        sets the gui state from a dictionary containing the shortnames of the widgets as keys and the values
+        Stetting the gui state from a dictionary
+        containing the shortnames of the widgets as keys and the values
         """
         for key, target_object in self._mapping.items():
-            self.set_single_state(target_object, value=state_dict[key])
+            self.set_single_state(target_object,
+                                  value=state_dict.get(key, None))
         return
 
     def raise_error(self, message, critical=False, info=False):
+        """
+        Errors are shown as popups
+        """
         self.error_dialog = QMessageBox()
         if critical:
             self.error_dialog.setIcon(QMessageBox.Critical)
@@ -105,4 +115,5 @@ class DNSView(QWidget):
         self.error_dialog.exec_()
 
     def show_statusmessage(self, message='', time=1, clear=False):
+        """Change of status message in global DNS GUI """
         self.parent.show_statusmessage(message, time, clear=clear)

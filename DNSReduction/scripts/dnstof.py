@@ -1,37 +1,31 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 DNS script helpers for TOF powder reduction
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
 
 # import mantid algorithms
-from mantid.simpleapi import LoadDNSLegacy, MergeRuns, DeleteWorkspaces
-from mantid.simpleapi import GroupWorkspaces, ConvertUnits, ConvertToMD
-from mantid.simpleapi import ConvertToMDMinMaxGlobal, MergeMD, BinMD, mtd
-from mantid.simpleapi import ConvertToDistribution, CorrectKiKf
-
-#-------------------------
-# helper functions
-#-------------------------
+from mantid.simpleapi import (BinMD, ConvertToDistribution, ConvertToMD,
+                              ConvertToMDMinMaxGlobal, ConvertUnits,
+                              CorrectKiKf, DeleteWorkspaces, GroupWorkspaces,
+                              LoadDNSLegacy, MergeMD, MergeRuns, mtd)
 
 
-def convert_to_dE(gws, Ei):
+def convert_to_d_e(gws, efixed):
     """Converting to dE"""
-    dEws = '{}_dE'.format(gws)
+    d_e_ws = '{}_dE'.format(gws)
     ConvertUnits(gws,
                  Target='DeltaE',
                  EMode='Direct',
-                 EFixed=Ei,
-                 OutputWorkspace=dEws)
-    ConvertToDistribution(dEws)
+                 EFixed=efixed,
+                 OutputWorkspace=d_e_ws)
+    ConvertToDistribution(d_e_ws)
     sws = '{}_dE_S'.format(gws)
-    CorrectKiKf(dEws, OutputWorkspace=sws)
+    CorrectKiKf(d_e_ws, OutputWorkspace=sws)
 
 
 def get_sqw(gws_name, outws_name, b):
@@ -72,7 +66,7 @@ def get_sqw(gws_name, outws_name, b):
 def load_data(data, prefix, p):
     """Loading of multiple DNS powder TOF data in workspaces"""
     wslist = []
-    ## bankpositions must be sorted, since script divides based on position
+    # bankpositions must be sorted, since script divides based on position
     bankpositions = sorted([x for x in data.keys() if x != 'path'])
     for i, bankposition in enumerate(bankpositions):
         wsname = "{}_{}".format(prefix, i + 1)

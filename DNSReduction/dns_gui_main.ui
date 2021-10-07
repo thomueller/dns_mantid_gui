@@ -79,7 +79,6 @@
      <addaction name="actionSimulation"/>
      <addaction name="actionPowder_elastic"/>
      <addaction name="actionPowder_TOF"/>
-     <addaction name="actionSingle_crystal_elastic"/>
      <addaction name="actionSingle_crystal_TOF"/>
     </widget>
     <addaction name="menuChange_Mode"/>

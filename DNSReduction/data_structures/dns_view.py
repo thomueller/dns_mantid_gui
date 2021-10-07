@@ -1,38 +1,50 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 Common Class for DNS Views - supports easy setting and getting of values
 """
-from __future__ import (absolute_import, division, print_function)
+
 from collections import OrderedDict
 
-from qtpy.QtWidgets import QWidget, QDoubleSpinBox, QLineEdit, QCheckBox
-from qtpy.QtWidgets import QSpinBox, QRadioButton, QGroupBox, QMessageBox, QSlider, QComboBox
-from qtpy.QtCore import Qt
-
 from mantidqt.gui_helper import get_qapplication
-
-app, within_mantid = get_qapplication()
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QGroupBox,
+                            QLineEdit, QMessageBox, QRadioButton, QSlider,
+                            QSpinBox, QToolButton, QWidget)
 
 
 class DNSView(QWidget):
-    def __init__(self, parent):
-        super(DNSView, self).__init__(parent)
-        self.parent = parent
-        self._content = None
-        self.has_tab = True
-        self._mapping = {}
-        self.error_dialog = None
-        self.within_mantid = within_mantid
+    HAS_TAB = True
+    NAME = 'DNSView'
 
-    def set_single_state(self, target_object, value):
+    def __init__(self, parent):
+        super().__init__(parent)
+        if parent is not None:
+            self.setVisible(False)
+        self.parent = parent
+        _content = None
+        self._map = {}
+        self.app, _within_manitd = get_qapplication()
+        self.menues = []
+
+    def process_events(self):
+        self.app.processEvents()
+
+    def set_single_state_by_name(self, name, value):
+        if name in self._map:
+            self.set_single_state(self._map[name], value)
+
+    @staticmethod
+    def set_single_state(target_object, value):
         """
          Setting widget value independent of type
         """
+        if value is None:
+            return
         if isinstance(target_object, QDoubleSpinBox):
             target_object.setValue(float(value))
         elif isinstance(target_object, QSpinBox):
@@ -45,17 +57,21 @@ class DNSView(QWidget):
             target_object.setChecked(value)
         elif isinstance(target_object, QComboBox):
             index = target_object.findText(
-                value,
-                Qt.MatchFixedString)  ### crapy workaround for Qt4 compability
+                str(value),
+                Qt.MatchFixedString)  # crapy workaround for Qt4 compability
             if index >= 0:
                 target_object.setCurrentIndex(index)
         elif isinstance(target_object, QSlider):
             target_object.setValue(value)
+        elif isinstance(target_object, QToolButton):
+            target_object.setChecked(value)
         elif isinstance(target_object, QGroupBox):
             if target_object.isCheckable():
                 target_object.setChecked(value)
 
-    def get_single_state(self, target_object):
+    @staticmethod
+    def _get_single_state(target_object):
+        # pylint: disable=too-many-return-statements
         """
         Returning of widget value independent of type
         """
@@ -73,6 +89,8 @@ class DNSView(QWidget):
             return target_object.currentText()
         if isinstance(target_object, QSlider):
             return target_object.value()
+        if isinstance(target_object, QToolButton):
+            return target_object.isChecked()
         if isinstance(target_object, QGroupBox):
             if target_object.isCheckable():
                 return target_object.isChecked()
@@ -80,12 +98,14 @@ class DNSView(QWidget):
 
     def get_state(self):
         """
-        Retuning of a dictionary with the names of the widgets as keys and the values
+        Retuning of a dictionary with the names of the widgets
+        as keys and the values
         """
         state_dict = OrderedDict()
-        for key, target_object in self._mapping.items():
-            state = self.get_single_state(target_object)
-            if state is not None:  ## pushbuttons for example are not defined in the get function
+        for key, target_object in self._map.items():
+            state = self._get_single_state(target_object)
+            if state is not None:
+                # pushbuttons for example are not defined in the get function
                 state_dict[key] = state
         return state_dict
 
@@ -94,25 +114,24 @@ class DNSView(QWidget):
         Stetting the gui state from a dictionary
         containing the shortnames of the widgets as keys and the values
         """
-        for key, target_object in self._mapping.items():
+        for key, target_object in self._map.items():
             self.set_single_state(target_object,
                                   value=state_dict.get(key, None))
-        return
 
     def raise_error(self, message, critical=False, info=False):
         """
         Errors are shown as popups
         """
-        self.error_dialog = QMessageBox()
+        error_dialog = QMessageBox()
         if critical:
-            self.error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setIcon(QMessageBox.Critical)
         elif info:
-            self.error_dialog.setIcon(QMessageBox.information)
+            error_dialog.setIcon(QMessageBox.information)
         else:
-            self.error_dialog.setIcon(QMessageBox.Warning)
-        self.error_dialog.setText(message)
-        self.error_dialog.setWindowTitle("Error")
-        self.error_dialog.exec_()
+            error_dialog.setIcon(QMessageBox.Warning)
+        error_dialog.setText(message)
+        error_dialog.setWindowTitle("Error")
+        error_dialog.exec_()
 
     def show_statusmessage(self, message='', time=1, clear=False):
         """Change of status message in global DNS GUI """

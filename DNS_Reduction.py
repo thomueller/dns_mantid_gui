@@ -8,20 +8,27 @@
 """
 GUI for reduction of elastic and TOF data at the DNS instrumentat MLZ
 """
-from __future__ import (absolute_import, division, print_function)
+# pylint: disable=invalid-name
+import os
 import sys
-
-from qtpy import QtGui
+print(sys.path.pop(0))
 
 from mantidqt.gui_helper import get_qapplication
+from qtpy import QtGui, QtWidgets
 
-from DNSReduction.main_view import DNSReductionGUI_view
+from mantidqtinterfaces.DNSReduction.main_widget import DNSReductionGuiWidget
 
 app, within_mantid = get_qapplication()
 
-reducer = DNSReductionGUI_view()
-reducer.setWindowTitle('DNS Reduction GUI')
-app.setWindowIcon(QtGui.QIcon('DNSReduction/dns_icon.png'))
-reducer.show()
+reducer_widget = DNSReductionGuiWidget(name='DNS-Reduction')
+view = reducer_widget.view
+view.setWindowTitle('DNS Reduction GUI- Powder TOF')
+screenShape = QtWidgets.QDesktopWidget().screenGeometry()
+view.resize(int(screenShape.width()*0.6), int(screenShape.height()*0.6))
+appdir = os.path.dirname(__file__)
+app.setWindowIcon(QtGui.QIcon('{}/DNSReduction/dns_icon.png'.format(appdir)))
+view.show()
+
 if not within_mantid:
     sys.exit(app.exec_())
+

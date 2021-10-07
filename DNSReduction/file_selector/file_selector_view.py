@@ -1,45 +1,40 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
-DNS File selector Widget = View - Tab of DNS Reduction GUI
+DNS File selector View - Tab of DNS Reduction GUI
 """
-from __future__ import (absolute_import, division, print_function)
 
-try:
-    from mantidqt.utils.qt import load_ui
-except ImportError:
-    from mantidplot import load_ui
+from mantidqt.utils.qt import load_ui
 
-#from DNSReduction.helpers.mapping_creator import mapping_creator
+# from mantidqtinterfaces.DNSReduction.helpers.mapping_creator import mapping_creator
 
+from qtpy.QtCore import QModelIndex, Qt, Signal
 from qtpy.QtWidgets import QProgressDialog
-from qtpy.QtCore import Qt, Signal
 
-from DNSReduction.data_structures.dns_view import DNSView
+from mantidqtinterfaces.DNSReduction.data_structures.dns_view import DNSView
 
-
-class DNSFileSelector_view(DNSView):
+class DNSFileSelectorView(DNSView):
     """
-        Widget that lets user select DNS data directories
+       lets user select DNS data data files for further reduction
     """
+    NAME = 'Data'
     def __init__(self, parent):
-        super(DNSFileSelector_view, self).__init__(parent)
-        self.name = 'Data'
+        super().__init__(parent)
         self._content = load_ui(__file__,
                                 'file_selector.ui',
                                 baseinstance=self)
 
-        self.sample_treeview = self._content.DNS_sample_view
-        self.sample_treeview.setUniformRowHeights(True)
-        self.treeview = self.sample_treeview
-        self.standard_treeview = self._content.DNS_standard_view
-        self.standard_treeview.setUniformRowHeights(True)
+        self._sample_treeview = self._content.DNS_sample_view
+        self._sample_treeview.setUniformRowHeights(True)
+        self._treeview = self._sample_treeview
+        self._standard_treeview = self._content.DNS_standard_view
+        self._standard_treeview.setUniformRowHeights(True)
 
-        self._mapping = {
+        self._map = {
             'filter_scans': self._content.cB_filter_scans,
             'file_to': self._content.sB_td_file_to,
             'file_nb': self._content.sB_td_file_nb,
@@ -56,67 +51,91 @@ class DNSFileSelector_view(DNSView):
             'auto_standard': self._content.cB_auto_standard,
         }
 
-        ## buttons
-        self._content.pB_td_read_all.clicked.connect(self.read_all_clicked)
+        self._treeview.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._treeview.customContextMenuRequested.connect(
+            self._treeview_clicked)
+        self._standard_treeview.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._standard_treeview.customContextMenuRequested.connect(
+            self._treeview_clicked)
+        # buttons
+        self._content.pB_td_read_all.clicked.connect(self._read_all_clicked)
         self._content.pB_td_read_filtered.clicked.connect(
-            self.read_all_clicked)
+            self._read_filtered_clicked)
         self._content.cB_filter_det_rot.stateChanged.connect(
-            self.filter_scans_checked)
+            self._filter_scans_checked)
         self._content.cB_filter_sample_rot.stateChanged.connect(
-            self.filter_scans_checked)
+            self._filter_scans_checked)
         self._content.cB_filter_scans.stateChanged.connect(
-            self.filter_scans_checked)
+            self._filter_scans_checked)
         self._content.cB_filter_cscans.stateChanged.connect(
-            self.filter_scans_checked)
+            self._filter_scans_checked)
         self._content.cB_filter_free.stateChanged.connect(
-            self.filter_scans_checked)
+            self._filter_scans_checked)
         self._content.lE_filter_free_text.textChanged.connect(
-            self.filter_scans_checked)
-        self._content.pB_expand_all.clicked.connect(self.expand)
-        self._content.pB_expand_none.clicked.connect(self.expand)
-        self._content.pB_check_all.clicked.connect(self.check_buttons_clicked)
-        self._content.pB_check_none.clicked.connect(self.check_buttons_clicked)
-        self._content.pB_check_last_scan.clicked.connect(
-            self.check_buttons_clicked)
+            self._filter_scans_checked)
+        self._content.pB_expand_all.clicked.connect(self.expand_all)
+        self._content.pB_expand_none.clicked.connect(self._un_expand_all)
+        self._content.pB_check_all.clicked.connect(self._check_all)
+        self._content.pB_check_none.clicked.connect(self._uncheck_all)
+        self._content.pB_check_last_scan.clicked.connect(self._check_last)
         self._content.pB_check_last_complete_scan.clicked.connect(
-            self.check_buttons_clicked)
-        self._content.pB_check_selected.clicked.connect(
-            self.check_buttons_clicked)
+            self._check_last)
+        self._content.pB_check_selected.clicked.connect(self._check_selected)
 
-        ## checkboxes
-        self._mapping['filter_vanadium'].stateChanged.connect(
-            self.filter_standard_checked)
-        self._mapping['filter_nicr'].stateChanged.connect(
-            self.filter_standard_checked)
-        self._mapping['filter_empty'].stateChanged.connect(
-            self.filter_standard_checked)
-        self._mapping['autoload'].stateChanged.connect(self.autoload_checked)
+        # checkboxes
+        self._map['filter_vanadium'].stateChanged.connect(
+            self._filter_standard_checked)
+        self._map['filter_nicr'].stateChanged.connect(
+            self._filter_standard_checked)
+        self._map['filter_empty'].stateChanged.connect(
+            self._filter_standard_checked)
+        self._map['autoload'].stateChanged.connect(self._autoload_checked)
 
-        ## combo box
+        # combo box
         self._content.combB_directory.currentIndexChanged.connect(
             self.combo_changed)
 
         self._content.groupBox_filter_standard.setHidden(1)
-        self.standard_treeview.setHidden(1)
+        self._standard_treeview.setHidden(1)
         self.progress = None
-        self.standard_active = 0  ### 0 = sample, 1 = standard
         self.combo_changed(0)
 
-    #### SIGNALS
-    sig_read_all = Signal(bool)
+    # SIGNALS
+    sig_read_all = Signal()
+    sig_read_filtered = Signal()
     sig_filters_clicked = Signal()
-    sig_checked_clicked = Signal(str)
+
+    sig_check_all = Signal()
+    sig_uncheck_all = Signal()
+    sig_check_selected = Signal()
+    sig_check_last = Signal(str)
+
     sig_progress_canceled = Signal()
     sig_autoload_clicked = Signal(int)
     sig_dataset_changed = Signal(int)
     sig_standard_filters_clicked = Signal()
+    sig_right_click = Signal(QModelIndex)
 
-    def autoload_checked(self, state):
+    # Signal reactions
+
+    def _treeview_clicked(self, point):
+        self.sig_right_click.emit(self._treeview.indexAt(point))
+
+    def _autoload_checked(self, state):
         self.sig_autoload_clicked.emit(state)
 
-    def check_buttons_clicked(self):
+    def _check_all(self):
+        self.sig_check_all.emit()
+
+    def _uncheck_all(self):
+        self.sig_uncheck_all.emit()
+
+    def _check_selected(self):
+        self.sig_check_selected.emit()
+
+    def _check_last(self):
         sender_name = self.sender().objectName()
-        self.sig_checked_clicked.emit(sender_name)
+        self.sig_check_last.emit(sender_name)
 
     def combo_changed(self, index):
         self._content.groupBox_filter.setHidden(index)
@@ -130,30 +149,34 @@ class DNSFileSelector_view(DNSView):
         self._content.cB_autoload.setHidden(index)
         self._content.l_td_file_to.setHidden(index)
         self._content.groupBox_filter_standard.setHidden(1 - index)
-        self.standard_treeview.setHidden(1 - index)
+        self._standard_treeview.setHidden(1 - index)
         self.cB_auto_standard.setHidden(1 - index)
-        self.sample_treeview.setHidden(index)
+        self._sample_treeview.setHidden(index)
         if index:
-            self.treeview = self.standard_treeview
+            self._treeview = self._standard_treeview
         else:
-            self.treeview = self.sample_treeview
+            self._treeview = self._sample_treeview
         self.sig_dataset_changed.emit(index)
 
-    def expand(self, alle=False):
-        if alle:
-            self.treeview.expandAll()
-            return
-        sender = self.sender()
-        if sender.objectName() == 'pB_expand_all':
-            self.treeview.expandAll()
-        else:
-            self.treeview.collapseAll()
+    def _un_expand_all(self):
+        self._treeview.collapseAll()
 
-    def filter_scans_checked(self):
+    def expand_all(self):  # public can be called from presenter
+        self._treeview.expandAll()
+
+    def _filter_scans_checked(self):
         self.sig_filters_clicked.emit()
 
-    def filter_standard_checked(self):
+    def _filter_standard_checked(self):
         self.sig_standard_filters_clicked.emit()
+
+    def _read_all_clicked(self):
+        self.sig_read_all.emit()
+
+    def _read_filtered_clicked(self):
+        self.sig_read_filtered.emit()
+
+    # get states
 
     def get_filters(self):
         """
@@ -164,8 +187,8 @@ class DNSFileSelector_view(DNSView):
         filters = {
             'det_rot': state_dict['filter_det_rot'],
             'sample_rot': state_dict['filter_sample_rot'],
-            ' scan': state_dict[
-                'filter_scans'],  ## space is important to not get cscans
+            ' scan': state_dict['filter_scans'],
+            # space is important to not get cscans
             'cscan': state_dict['filter_cscans'],
             freetext: state_dict['filter_free'],
         }
@@ -179,7 +202,7 @@ class DNSFileSelector_view(DNSView):
         return self._content.sB_last_scans.value()
 
     def get_selected_indexes(self):
-        return self.treeview.selectedIndexes()
+        return self._treeview.selectedIndexes()
 
     def get_standard_filters(self):
         state_dict = self.get_state()
@@ -191,64 +214,71 @@ class DNSFileSelector_view(DNSView):
         return filters
 
     def get_start_end_filenumbers(self):
-        start = self._mapping['file_nb'].value()
-        end = self._mapping['file_to'].value()
+        start = self._map['file_nb'].value()
+        end = self._map['file_to'].value()
         return [start, end]
 
-    def hide_file(self, child, scanindex, hidden=True):
-        self.treeview.setRowHidden(child.row(), scanindex, hidden)
+    # hiding / showing scans / files
+
+    # def hide_file(self, child, scanindex, hidden=True):
+    #     self._treeview.setRowHidden(child.row(), scanindex, hidden)
 
     def hide_scan(self, row, hidden=True):
-        self.treeview.setRowHidden(row, self.treeview.rootIndex(), hidden)
+        self._treeview.setRowHidden(row, self._treeview.rootIndex(), hidden)
+
+    # def hide_scans(self, rows):
+    #    for row in rows:
+    #        self.hide_scan(row, hidden=True)
+
+    def show_scan(self, row):
+        self._treeview.setRowHidden(row, self._treeview.rootIndex(), False)
+
+    # def show_scans(self, rows):
+    #    for row in rows:
+    #        self.show_scan(row)
 
     def hide_tof(self, hidden=True):
-        self.standard_treeview.setColumnHidden(7, hidden)
-        self.standard_treeview.setColumnHidden(8, hidden)
-        self.sample_treeview.setColumnHidden(7, hidden)
-        self.sample_treeview.setColumnHidden(8, hidden)
+        self._standard_treeview.setColumnHidden(7, hidden)
+        self._standard_treeview.setColumnHidden(8, hidden)
+        self._sample_treeview.setColumnHidden(7, hidden)
+        self._sample_treeview.setColumnHidden(8, hidden)
 
-    def is_file_hidden(self, child, scanindex):
-        return self.treeview.isRowHidden(child.row(), scanindex)
+    # def is_file_hidden(self, child, scanindex):
+    #     return self._treeview.isRowHidden(child.row(), scanindex)
 
     def is_scan_hidden(self, row):
-        return self.treeview.isRowHidden(row, self.treeview.rootIndex())
+        return self._treeview.isRowHidden(row, self._treeview.rootIndex())
+
+    # progress dialog
 
     def open_progress_dialog(self, numofsteps):
-        self.progress = QProgressDialog(
-            "Loading {} files...".format(numofsteps), "Abort Loading", 0,
-            numofsteps)
-        self.progress.setWindowModality(Qt.WindowModal)
-        self.progress.setMinimumDuration(200)
-        self.progress.open(self.progress_canceled)
+        if numofsteps:
+            self.progress = QProgressDialog(
+                "Loading {} files...".format(numofsteps), "Abort Loading", 0,
+                numofsteps)
+            self.progress.setWindowModality(Qt.WindowModal)
+            self.progress.setMinimumDuration(200)
+            self.progress.open(self._progress_canceled)
 
-    def progress_canceled(self):
+    def _progress_canceled(self):
         self.sig_progress_canceled.emit()
-
-    def read_all_clicked(self):
-        filtered = False
-        if self.sender().objectName() == 'pB_td_read_filtered':
-            filtered = True
-        self.sig_read_all.emit(filtered)
-
-    def set_first_column_spanned(self, scanrange):
-        for i in scanrange:
-            self.treeview.setFirstColumnSpanned(i, self.treeview.rootIndex(),
-                                                True)
 
     def set_progress(self, step):
         self.progress.setValue(step)
 
-    def set_start_end_filenumbers(self, alldatafiles):
-        """
-        called by read all, set the filenumber of the first and last file
-        """
-        start = int(alldatafiles[0].split('_')[-2][:-2])
-        end = int(alldatafiles[-1].split('_')[-2][:-2])
-        self.set_single_state(self._mapping['file_nb'], start)
-        self.set_single_state(self._mapping['file_to'], end)
+    # manipulating view
+
+    def set_first_column_spanned(self, scanrange):
+        for i in scanrange:
+            self._treeview.setFirstColumnSpanned(i, self._treeview.rootIndex(),
+                                                 True)
+
+    def set_start_end_filenumbers_from_arguments(self, start, end):
+        self.set_single_state(self._map['file_nb'], start)
+        self.set_single_state(self._map['file_to'], end)
 
     def set_tree_model(self, model, standard=False):
         if standard:
-            self.standard_treeview.setModel(model)
+            self._standard_treeview.setModel(model)
         else:
-            self.sample_treeview.setModel(model)
+            self._sample_treeview.setModel(model)

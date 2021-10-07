@@ -1,6 +1,6 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
@@ -9,14 +9,13 @@
 creates mapping of Qt elements in ui file
 """
 
-from __future__ import (absolute_import, division, print_function)
+from qtpy.QtWidgets import (QCheckBox, QDoubleSpinBox, QGroupBox, QLineEdit,
+                            QRadioButton, QSpinBox)
 
-from qtpy.QtWidgets import QDoubleSpinBox, QLineEdit, QCheckBox, QSpinBox, QRadioButton, QGroupBox
 
-
-class mapping_creator(object):
+class MappingCreator:
     def __init__(self, ui):
-        mapping = '        self._mapping = ' + str(
+        mapping = '        self._map = ' + str(
             self.get_mapping(search=ui, mapping={}))
         mapping = mapping.replace("', u'", ",\n                       '")
         mapping = mapping.replace(": u'", ": self._content.")
@@ -39,7 +38,9 @@ class mapping_creator(object):
                 mapping[shortname] = name
         return mapping
 
-    def get_single_state(self, target_object):
+    @staticmethod
+    def get_single_state(target_object):
+        # pylint: disable=too-many-return-statements
         """
         defines for which Widgets status should be returned and how
         """
@@ -58,7 +59,8 @@ class mapping_creator(object):
                 return target_object.isChecked
         return None
 
-    def set_single_state(self, target_object, value):
+    @staticmethod
+    def set_single_state(target_object, value):
         """
         defines for which Widgets status should be set and how
         """

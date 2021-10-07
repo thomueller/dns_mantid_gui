@@ -1,6 +1,6 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
@@ -8,36 +8,56 @@
  dns xml data dump presenter
 """
 
-from __future__ import (absolute_import, division, print_function)
-
-from DNSReduction.xml_dump import xml_helper
-from DNSReduction.data_structures.dns_observer import DNSObserver
-from DNSReduction.xml_dump.xml_dump_view import DNSXMLDump_view
+from mantidqtinterfaces.DNSReduction.data_structures.dns_observer import DNSObserver
 
 
-class DNSXMLDump_presenter(DNSObserver):
-    name = 'xml'
-
-    def __init__(self, parent):
-        super(DNSXMLDump_presenter, self).__init__(parent, 'xml_dump')
-        self.name = 'xml_dump'
-        self.view = DNSXMLDump_view(None)
+class DNSXMLDumpPresenter(DNSObserver):
+    def __init__(self, name=None, parent=None, view=None, model=None):
+        super().__init__(parent=parent, name=name, view=view, model=model)
+        self.last_filename = None
 
     def load_xml(self):
         """Load DNS GUI options from xml file """
-        xml_file_path = self.view.get_load_filename()
-        options = xml_helper.xml_file_to_dict(xml_file_path)
-        if options is None:
-            print('No DNS xml file')
+        xml_file_path = self._get_xml_file_path_for_loading()
+        options = self.model.xml_file_to_dict(xml_file_path)
         return options
+
+    def save_as_xml(self):
+        """Save of DNS GUI options to xml file asking for name"""
+        xml_file_path = self._get_xml_file_path_for_saving()
+        if xml_file_path:
+            xml_header = self.view.get_file_header()
+            options = self.param_dict
+            self.model.dic_to_xml_file(options, xml_file_path, xml_header)
+            self.last_filename = xml_file_path
+            self.view.show_statusmessage('Saved as {}'.format(xml_file_path),
+                                         30)
+        return xml_file_path
 
     def save_xml(self):
         """Save of DNS GUI options to xml file """
-        xml_file_path = self.view.get_save_filename()
-        if xml_file_path:
+        if self.last_filename is not None:
+            xml_header = self.view.get_file_header()
             options = self.param_dict
-            xml_helper.dic_to_xml_file(options, xml_file_path)
-        return xml_file_path
+            self.model.dic_to_xml_file(options, self.last_filename, xml_header)
+            self.view.show_statusmessage(
+                'Saved as {}'.format(self.last_filename), 30)
+        else:
+            self.save_as_xml()
 
     def set_view_from_param(self):
         pass
+
+    def _get_xml_file_path_for_loading(self):
+        xml_filepath = self.view.open_load_filename()
+        xml_filepath = xml_filepath[0]
+        if xml_filepath and not xml_filepath.lower().endswith('.xml'):
+            xml_filepath = ''.join([xml_filepath, '.xml'])
+        return xml_filepath
+
+    def _get_xml_file_path_for_saving(self):
+        xml_filepath = self.view.open_save_filename()
+        xml_filepath = xml_filepath[0]
+        if xml_filepath and not xml_filepath.lower().endswith('.xml'):
+            xml_filepath = ''.join([xml_filepath, '.xml'])
+        return xml_filepath

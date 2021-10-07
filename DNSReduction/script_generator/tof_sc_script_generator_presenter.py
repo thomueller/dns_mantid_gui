@@ -1,6 +1,6 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
@@ -8,25 +8,23 @@
 Common script generator for DNS data reduction
 """
 
-from __future__ import (absolute_import, division, print_function)
+from mantidqtinterfaces.DNSReduction.script_generator.common_script_generator_presenter import \
+    DNSScriptGeneratorPresenter
+from mantidqtinterfaces.DNSReduction.scripts.dnstof_sc import hkl_string_to_mantid_string
 
-from DNSReduction.script_generator.common_script_generator_presenter import DNSScriptGenerator_presenter
-from DNSReduction.scripts.dnstof_sc import hkl_string_to_mantid_string
 
-
-class DNSTofScScriptGenerator_presenter(DNSScriptGenerator_presenter):
+class DNSTofScScriptGeneratorPresenter(DNSScriptGeneratorPresenter):
 
     # pass the view and model into the presenter
-    def __init__(self, parent):
-        super(DNSTofScScriptGenerator_presenter,
-              self).__init__(parent, 'tof_sc_script_generator')
+    def __init__(self, name=None, parent=None, view=None, model=None):
+        super().__init__(parent=parent, name=name, view=view, model=model)
         self.number_of_banks = None
         self.script = None
 
-    def script_maker(self):
+    def maker(self):
         self.script = [""]
 
-        def l(line=""):
+        def l(line=""):  # noqa: E741, E743
             self.script += [line]
 
         sampledata = self.param_dict['file_selector']['full_data']
@@ -48,12 +46,11 @@ class DNSTofScScriptGenerator_presenter(DNSScriptGenerator_presenter):
         ])
         bins = ','.join(
             [str(tof_opt[x]) for x in ['hbins', 'kbins', 'lbins', 'dEbins']])
-        l("from __future__ import absolute_import, " \
-          "division, print_function, unicode_literals"
-         )
+        l("from __future__ import absolute_import, "
+          "division, print_function, unicode_literals")
         l("from mantid.simpleapi import *")
         l("from collections import OrderedDict")
-        l("from DNSReduction.scripts.dnstof_sc import get_filepath_string")
+        l("from mantidqtinterfaces.DNSReduction.scripts.dnstof_sc import get_filepath_string")
         l()
         l("data   = {{'data_path'        : '{}',".format(
             self.param_dict['paths']['data_dir']) +
@@ -86,20 +83,16 @@ class DNSTofScScriptGenerator_presenter(DNSScriptGenerator_presenter):
         l("extents = '{}'".format(extents))
         l("bins = '{}'".format(bins))
         l()
-        l("raw_data = BinMD('raw_edata', AxisAligned='0', " \
-          "BasisVector0=bvector0, BasisVector1=bvector1," \
+        l("raw_data = BinMD('raw_edata', AxisAligned='0', "
+          "BasisVector0=bvector0, BasisVector1=bvector1,"
           "BasisVector2=bvector2,"
-          +
-          "\n                 BasisVector3=bvector3, OutputExtents=extents," \
-          "OutputBins=bins, NormalizeBasisVectors='0')"
-         )
-        l("data_norm = BinMD('edata_norm', AxisAligned='0', " \
-          "BasisVector0=bvector0,  BasisVector1=bvector1, " \
+          "\n                 BasisVector3=bvector3, OutputExtents=extents,"
+          "OutputBins=bins, NormalizeBasisVectors='0')")
+        l("data_norm = BinMD('edata_norm', AxisAligned='0', "
+          "BasisVector0=bvector0,  BasisVector1=bvector1, "
           "BasisVector2=bvector2,"
-          +
-          "\n                 BasisVector3=bvector3, OutputExtents=extents," \
-          "OutputBins=bins, NormalizeBasisVectors='0')"
-         )
+          "\n                 BasisVector3=bvector3, OutputExtents=extents,"
+          "OutputBins=bins, NormalizeBasisVectors='0')")
 
         l("## normalize ##")
         l("data = raw_data/data_norm")

@@ -1,20 +1,19 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 DNS script helpers for elastic powder reduction
 """
-from __future__ import (absolute_import, division, print_function)
+
 import numpy as np
+from mantid.simpleapi import (BinMD, CreateSingleValuedWorkspace, DivideMD,
+                              GroupWorkspaces, IntegrateMDHistoWorkspace,
+                              LoadDNSSCD, MinusMD, MultiplyMD, PlusMD, mtd)
 
-from mantid.simpleapi import LoadDNSSCD, mtd, BinMD, DivideMD, MultiplyMD
-from mantid.simpleapi import MinusMD, CreateSingleValuedWorkspace
-from mantid.simpleapi import IntegrateMDHistoWorkspace, PlusMD, GroupWorkspaces
-
-from DNSReduction.data_structures.dns_error import DNSError
+from mantidqtinterfaces.DNSReduction.data_structures.dns_error import DNSError
 
 
 def background_substraction(workspacename, factor=1):
@@ -58,8 +57,8 @@ def fliping_ratio_correction(workspace):
     nicr_sf_norm = '_'.join((nicr_sf, 'norm'))
     nicr_nsf_norm = '_'.join((nicr_nsf, 'norm'))
     try:
-        mtd[nicr_sf]
-        mtd[nicr_nsf]
+        _dummy = mtd[nicr_sf]
+        _dummy = mtd[nicr_nsf]
     except KeyError:
         raise_error(
             'no matching NiCr workspace found for {}'.format(workspace))
@@ -101,16 +100,16 @@ def load_all(data_dict, binning, normalizeto='monitor'):
 def load_binned(workspacename, binning, path, filenumbers, normalizeto):
     """Loading of multiple DNS datafiles into a single workspace
     """
-    filepaths = []
-    ad0 = 'Theta,{},{},{}'.format(binning[1] / 2.0, binning[2] / 2.0,
-                                  binning[3])
-    two_theta_limits = "{},{}".format(binning[1], binning[2])
+    filepathsl = []
+    ad0 = 'Theta,{},{},{}'.format(binning[0] / 2.0, binning[1] / 2.0,
+                                  binning[2])
+    two_theta_limits = "{},{}".format(binning[0], binning[1])
     ad1 = 'Omega,0.0,359.0,1'
     ad2 = 'TOF,424.0,2000.0,1'
     binning = [ad0, ad1, ad2]
-    filepaths.append(
-        ["{}_{}.d_dat".format(path, number) for number in filenumbers])
-    filepaths = ', '.join(filepaths[0])
+    filepathsl.append(
+        ["{}_{:06d}.d_dat".format(path, number) for number in filenumbers])
+    filepaths = ', '.join(filepathsl[0])
     normname = "_".join((workspacename, 'norm'))
     LoadDNSSCD(filepaths,
                OutputWorkspace=workspacename,
@@ -157,6 +156,8 @@ def vanadium_correction(workspacename,
     ignore_vana_fields = if True fields of vanadium files will be ignored
     sum_vana_sf_nsf ) if True SF and NSF channels of vanadium are summed
     """
+    vana_sum = None
+    vana_sum_norm = None
     workspacenorm = '_'.join((workspacename, 'norm'))
     if workspacename.endswith('_sf'):
         fieldname = workspacename[-4:]
@@ -183,9 +184,8 @@ def vanadium_correction(workspacename,
             vana_sum_norm = sum(normlist)
         else:
             raise_error(
-                'Need to give vanadium dataset explicit if you want all'\
-                ' vandium files to be added.'
-            )
+                'Need to give vanadium dataset explicit if you want all'
+                ' vandium files to be added.')
     elif sum_vana_sf_nsf:
         polarization = fieldname.split('_')[0]
         vana_nsf = '_'.join(('vana', polarization, 'nsf'))
@@ -197,7 +197,7 @@ def vanadium_correction(workspacename,
             vana_sf_norm = mtd[vana_sf_norm]
         except KeyError:
             raise_error(
-                'No vanadium file for {}_sf . You can choose to ignore' \
+                'No vanadium file for {}_sf . You can choose to ignore'
                 ' vanadium fields in the options.'.format(polarization))
             return mtd[workspacename]
         try:
@@ -205,7 +205,7 @@ def vanadium_correction(workspacename,
             vana_nsf_norm = mtd[vana_nsf_norm]
         except KeyError:
             raise_error(
-                'No vanadium file for {}_nsf. You can choose to ignore' \
+                'No vanadium file for {}_nsf. You can choose to ignore'
                 ' vanadium fields in the options.'.format(polarization))
             return mtd[workspacename]
         vana_sum = vana_sf + vana_nsf
@@ -217,15 +217,15 @@ def vanadium_correction(workspacename,
             vana_sum = mtd[vananame]
             vana_sum_norm = mtd[vananorm]
         except KeyError:
-            raise_error('No vanadium file for {}. You can choose to ignore' \
+            raise_error('No vanadium file for {}. You can choose to ignore'
                         ' vanadium fields in the options.'.format(fieldname))
             return mtd[workspacename]
-    ### commen code, which will be run regardless of the case
+    # commen code, which will be run regardless of the case
     vana_total = IntegrateMDHistoWorkspace(vana_sum,
-                                           P1Bin=[5.0, 124.5],
+                                           P1Bin=[4.7, 124.8],
                                            P2Bin=[])
     vana_total_norm = IntegrateMDHistoWorkspace(vana_sum_norm,
-                                                P1Bin=[5.0, 124.5],
+                                                P1Bin=[4.7, 124.8],
                                                 P2Bin=[])
     vana_total = CreateSingleValuedWorkspace(
         DataValue=vana_total.getSignalArray()[0][0][0],
@@ -256,10 +256,11 @@ def xyz_seperation(x_sf, y_sf, z_sf, z_nsf):
     mtd['{}_magnetic'.format(samplename)] = half_imag * 2
     mtd['{}_spin_incoh'.format(samplename)] = one_third_inc * 3
     mtd['{}_nuclear_coh'.format(samplename)] = mtd[z_nsf] - mag_inc_sum
-    seperated = GroupWorkspaces([
+    GroupWorkspaces([
         '{}_magnetic'.format(samplename), '{}_spin_incoh'.format(samplename),
         '{}_nuclear_coh'.format(samplename)
-    ])
+    ],
+        OutputWorkspace='seperated')
     return [
         mtd['{}_nuclear_coh'.format(samplename)],
         mtd['{}_magnetic'.format(samplename)],
@@ -269,13 +270,14 @@ def xyz_seperation(x_sf, y_sf, z_sf, z_nsf):
 
 def non_mag_sep(sf_workspace, nsf_workspace):
     """Seperation for non magnetic samples based on SF/NSF measurements"""
-    samplename = sf_workspace[:-5]
+    samplename = sf_workspace[:-3]
     mtd['{}_nuclear_coh'.format(
         samplename)] = mtd[nsf_workspace] - 0.5 * mtd[sf_workspace]
     mtd['{}_spin_incoh'.format(samplename)] = 1.5 * mtd[sf_workspace]
-    seperated = GroupWorkspaces([
+    GroupWorkspaces([
         '{}_nuclear_coh'.format(samplename), '{}_spin_incoh'.format(samplename)
-    ])
+    ],
+        OutputWorkspace='separted')
     return [
         mtd['{}_nuclear_coh'.format(samplename)],
         mtd['{}_spin_incoh'.format(samplename)]

@@ -1,215 +1,199 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 DNS Widget to plot elastic powder data
 """
-from __future__ import (absolute_import, division, print_function)
-from collections import OrderedDict
 
-from qtpy.QtWidgets import QSizePolicy
-from qtpy.QtCore import Signal
+from threading import Timer
 
-from matplotlib.backends.backend_qt5agg import (FigureCanvas,
-                                                NavigationToolbar2QT as
-                                                NavigationToolbar)
+from mantidqt import icons
+from mantidqt.utils.qt import load_ui
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.backends.backend_qt5agg import \
+    NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from matplotlib.ticker import AutoMinorLocator, NullLocator
-from mantidqt import icons
-try:
-    from mantidqt.utils.qt import load_ui
-except ImportError:
-    from mantidplot import load_ui
-from DNSReduction.data_structures.dns_view import DNSView
-from DNSReduction.data_structures.dns_plot_list import DNSPlotListModel
+from qtpy.QtCore import Signal
+from qtpy.QtWidgets import QSizePolicy
 
 
-class DNSElasticPowderPlot_view(DNSView):
+from mantidqtinterfaces.DNSReduction.data_structures.dns_plot_list import DNSPlotListModel
+from mantidqtinterfaces.DNSReduction.data_structures.dns_view import DNSView
+
+LINESTYLES = {
+    0: '-',
+    1: '.',
+    2: '.-'}
+
+
+class DNSElasticPowderPlotView(DNSView):
     """
        DNS Widget to plot elastic powder data
     """
-    ## Widget name
-    name = "Paths"
+    NAME = 'Plotting'
 
     def __init__(self, parent):
-        super(DNSElasticPowderPlot_view, self).__init__(parent)
-        self._content = load_ui(__file__,
+        super().__init__(parent)
+        content = load_ui(__file__,
                                 'elastic_powder_plot.ui',
                                 baseinstance=self)
-        self.name = 'Plotting'
-        self.xml_filepath = None
-        self.main_view = parent
-        self.has_tab = True
-        self.layout = self._content.plot_layout
+        layout = content.plot_layout
         self.static_canvas = FigureCanvas(Figure(figsize=(5, 3), dpi=200))
         self.static_canvas.setSizePolicy(QSizePolicy.Expanding,
                                          QSizePolicy.Expanding)
-        self.toolbar = NavigationToolbar(self.static_canvas, self)
-        self.plot_head_layout.addWidget(self.toolbar)
-        self.plot_head_layout.addStretch()
+        toolbar = NavigationToolbar(self.static_canvas, self)
+        content.plot_head_layout.addWidget(toolbar)
+        content.plot_head_layout.addStretch()
 
-        self.layout.addWidget(self.static_canvas)
-        self._mapping = {
-            'datalist': self._content.lV_datalist,
-            'down': self._content.tB_down,
-            'up': self._content.tB_up,
-            'raw': self._content.tB_raw,
-            'separated': self._content.tB_separated,
-            'deselect': self._content.tB_deselect,
-            'grid': self._content.tB_grid,
-            'log_scale': self._content.cB_log_scale,
-            'linestyle': self._content.tB_linestyle,
-            'errorbar': self._content.tB_errorbar,
-            'xaxis_scale': self._content.combB_xaxis_scale,
+        layout.addWidget(self.static_canvas)
+        self._map = {
+            'datalist': content.lV_datalist,
+            'down': content.tB_down,
+            'up': content.tB_up,
+            'raw': content.tB_raw,
+            'separated': content.tB_separated,
+            'deselect': content.tB_deselect,
+            'grid': content.tB_grid,
+            'log_scale': content.cB_log_scale,
+            'linestyle': content.tB_linestyle,
+            'errorbar': content.tB_errorbar,
+            'xaxis_scale': content.combB_xaxis_scale,
         }
 
-        self._mapping['down'].setIcon(icons.get_icon("mdi.arrow-down"))
-        self._mapping['up'].setIcon(icons.get_icon("mdi.arrow-up"))
-        self._mapping['deselect'].setIcon(icons.get_icon("mdi.close"))
-        self._mapping['grid'].setIcon(icons.get_icon("mdi.grid"))
-        self._mapping['linestyle'].setIcon(icons.get_icon("mdi.ray-vertex"))
-        self._mapping['errorbar'].setIcon(icons.get_icon("mdi.format-size"))
+        self._map['down'].setIcon(icons.get_icon("mdi.arrow-down"))
+        self._map['up'].setIcon(icons.get_icon("mdi.arrow-up"))
+        self._map['deselect'].setIcon(icons.get_icon("mdi.close"))
+        self._map['grid'].setIcon(icons.get_icon("mdi.grid"))
+        self._map['linestyle'].setIcon(icons.get_icon("mdi.ray-vertex"))
+        self._map['errorbar'].setIcon(icons.get_icon("mdi.format-size"))
 
-        self.datalist = self._mapping['datalist']
-        self.hasplot = False
+        self.datalist = self._map['datalist']
         self.ax = None
-        self.cb = None
-        self.plotmin = None
-        self.cl = None
-        self.workspace = None
-        self.plotmax = None
-        self.minimum = None
-        self.maximum = None
-        self.hasplot = False
         self.static_canvas.figure.tight_layout()
         self.model = DNSPlotListModel(self.datalist)
-        self.model.itemChanged.connect(self.something_changed)
-        self._mapping['down'].clicked.connect(self.model.down)
-        self._mapping['up'].clicked.connect(self.model.up)
-        self._mapping['deselect'].clicked.connect(self.uncheck_items)
-        self._mapping['separated'].clicked.connect(self.check_seperated)
-        self._mapping['grid'].clicked.connect(self.set_grid)
-        self._mapping['log_scale'].stateChanged.connect(self.set_log)
-        self._mapping['raw'].clicked.connect(self.check_raw)
-        self._mapping['linestyle'].clicked.connect(self.change_linestyle)
-        self._mapping['errorbar'].clicked.connect(self.change_errorbar)
-        self._mapping['xaxis_scale'].currentIndexChanged.connect(
-            self.something_changed)
-        self.gridstate = 0
-        self.linestyles = {
-            0: '-',
-            1: '.',
-            2: '.-',
-        }
-        self.linestyle = 0
-        self.errorbar = 0
+        self.model.itemChanged.connect(self._something_changed)
+        self._map['down'].clicked.connect(self.model.down)
+        self._map['up'].clicked.connect(self.model.up)
+        self._map['deselect'].clicked.connect(self._uncheck_items)
+        self._map['separated'].clicked.connect(self.check_seperated)
+        self._map['grid'].clicked.connect(self._gridstate_change)
+        self._map['log_scale'].stateChanged.connect(self._log_change)
+        self._map['raw'].clicked.connect(self.check_raw)
+        self._map['linestyle'].clicked.connect(self._linestyle_change)
+        self._map['errorbar'].clicked.connect(self._errorbar_change)
+        self._map['xaxis_scale'].currentIndexChanged.connect(
+            self._something_changed)
 
-    sig_plot = Signal(list)
+    sig_plot = Signal()
+    sig_gridstate_change = Signal(bool)  # bool = if to draw
+    sig_errorbar_change = Signal()
+    sig_linestyle_change = Signal()
+    sig_log_change = Signal(bool)  # bool = if logscale
+
+    def _log_change(self):
+        log = self._map['log_scale'].checkState()
+        self.sig_log_change.emit(log)
+
+    def _linestyle_change(self):
+        self.sig_linestyle_change.emit()
+
+    def _errorbar_change(self):
+        self.sig_errorbar_change.emit()
+
+    def _gridstate_change(self, _dummy, draw=True):
+        self.sig_gridstate_change.emit(draw)
 
     def check_first(self):
         self.model.check_first()
 
-    def uncheck_items(self):
+    def _uncheck_items(self):
         self.model.itemChanged.disconnect()
         self.model.uncheck_items()
-        self.model.itemChanged.connect(self.something_changed)
-        self.something_changed()
+        self.model.itemChanged.connect(self._something_changed)
+        self._something_changed()
 
     def check_seperated(self):
         self.model.itemChanged.disconnect()
         self.model.check_seperated()
-        self.model.itemChanged.connect(self.something_changed)
-        self.something_changed()
+        self.model.itemChanged.connect(self._something_changed)
+        self._something_changed()
 
     def check_raw(self):
         self.model.itemChanged.disconnect()
         self.model.check_raw()
-        self.model.itemChanged.connect(self.something_changed)
-        self.something_changed()
+        self.model.itemChanged.connect(self._something_changed)
+        self._something_changed()
 
-    def something_changed(self):
-        self.sig_plot.emit(self.model.get_checked_item_names())
-
-    def change_errorbar(self):
-        self.errorbar = (self.errorbar + 1) % 3
-        self.something_changed()
-
-    def change_linestyle(self):
-        self.linestyle = (self.linestyle + 1) % 3
-        self.something_changed()
+    def _something_changed(self):
+        self.sig_plot.emit()
 
     def get_datalist(self):
         return self.model.get_names()
-
-    def set_line_and_grid_from_xml(self, gridstate, linestyle):
-        self.gridstate = gridstate
-        self.linestyle = linestyle
-        self.something_changed()
 
     def set_datalist(self, datalist):
         self.model.itemChanged.disconnect()
         self.model.set_items(datalist)
         self.datalist.setModel(self.model)
-        self.model.itemChanged.connect(self.something_changed)
+        self.model.itemChanged.connect(self._something_changed)
 
     def clear_plot(self):
         if self.ax:
             self.ax.figure.clear()
-        self.hasplot = False
 
     def get_xaxis(self):
-        return self._mapping['xaxis_scale'].currentText()
+        return self._map['xaxis_scale'].currentText()
 
-    def plot(self):
+    def _plot(self):
         self.sig_plot.emit()
 
-    def set_log(self, state):
-        if state:
-            self.ax.set_yscale('symlog')
-        else:
-            self.ax.set_yscale('linear')
+    def set_yscale(self, scale):
+        self.ax.set_yscale(scale)
+        self.draw()
+
+    def set_no_grid(self):
+        if self.ax is None:
+            return
+        self.ax.xaxis.set_minor_locator(NullLocator())
+        self.ax.grid(0)
+
+    def set_major_minor_grid(self):
+        if self.ax is None:
+            return
+        self.ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        self.ax.grid(1, which='both', zorder=-1000, linestyle='--')
+
+    def set_major_grid(self):
+        if self.ax is None:
+            return
+        self.ax.xaxis.set_minor_locator(NullLocator())
+        self.ax.grid(1, which='both', zorder=-1000, linestyle='--')
+
+    def draw(self):
         self.ax.figure.canvas.draw()
 
-    def set_grid(self, dummy, draw=True):
-        if draw:
-            self.gridstate = (self.gridstate + 1) % 3
-        if self.gridstate == 1:
-            self.ax.xaxis.set_minor_locator(NullLocator())
-            self.ax.grid(self.gridstate,
-                         which='both',
-                         zorder=-1000,
-                         linestyle='--')
-        elif self.gridstate == 2:
-            self.ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-            self.ax.grid(self.gridstate,
-                         which='both',
-                         zorder=-1000,
-                         linestyle='--')
-        else:
-            self.ax.xaxis.set_minor_locator(NullLocator())
-            self.ax.grid(0)
-        if draw:
-            self.ax.figure.canvas.draw()
+    def get_check_plots(self):
+        return self.model.get_checked_item_names()
 
-    def single_plot(self, x, y, yerr, label):
-        if self.errorbar:
-            self.ax.errorbar(x,
-                             y,
-                             yerr=yerr,
-                             fmt=self.linestyles[self.linestyle],
-                             label=label,
-                             capsize=(self.errorbar - 1) * 3)
-        else:
-            self.ax.plot(x, y, self.linestyles[self.linestyle], label=label)
+    def single_error_plot(self, x, y, yerr, label, capsize, linestyle):
+        # pylint: disable=too-many-arguments
+        self.ax.errorbar(x,
+                         y,
+                         yerr=yerr,
+                         fmt=LINESTYLES[linestyle],
+                         label=label,
+                         capsize=capsize)
+
+    def single_plot(self, x, y, label, linestyle):
+        self.ax.plot(x, y, LINESTYLES[linestyle], label=label)
 
     def create_plot(self, norm):
         if self.ax:
             self.ax.figure.clear()
         self.ax = self.static_canvas.figure.subplots()
-        self.ax.set_title('Elastic Powder')
         self.ax.set_xlabel('2 theta (degree)')
         self.ax.set_ylabel('Intensity ({})'.format(norm))
 
@@ -217,39 +201,14 @@ class DNSElasticPowderPlot_view(DNSView):
         if self.model.get_checked_item_names():
             self.ax.legend()
         self.static_canvas.figure.tight_layout()
-        if xaxis == 'q':
-            self.ax.set_xlabel(r'$q (\AA^{-1})$')
-        elif xaxis == 'd':
-            self.ax.set_xlabel(r'$d (\AA)$')
-        else:
-            self.ax.set_xlabel('2 theta (degree)')
+        self.ax.set_xlabel(xaxis)
+        self._gridstate_change(0, draw=False)
+        self._log_change()
 
-        self.set_grid(0, draw=False)
-        self.set_log(self._mapping['log_scale'].checkState())
-        self.hasplot = True
+    def start_timer(self):
+        t = Timer(0.01, self._on_timer)  # wait until plot is draw
+        t.start()
 
-    def get_state(self):
-        """
-        returns a dictionary with the names of the widgets as keys and the values
-        """
-        state_dict = OrderedDict()
-
-        for key, target_object in self._mapping.items():
-            state = self.get_single_state(target_object)
-            if state is not None:  ## pushbuttons for example are not defined in the get function
-                state_dict[key] = state
-        state_dict['linestyle'] = self.linestyle
-        state_dict['gridstate'] = self.gridstate
-        return state_dict
-
-    def set_state(self, state_dict):
-        """
-        sets the gui state from a dictionary containing the shortnames of the widgets as keys and the values
-        """
-        self.gridstate = state_dict.get('gridstate', 0)
-        self.linestyle = state_dict.get('linestyle', 0)
-        for key, target_object in self._mapping.items():
-            self.set_single_state(target_object,
-                                  value=state_dict.get(key, None))
-        self.something_changed()
-        return
+    def _on_timer(self):
+        self.static_canvas.figure.tight_layout()
+        self.draw()

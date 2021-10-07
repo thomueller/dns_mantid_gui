@@ -1,18 +1,18 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 Custum Tree Item for DNS which is either a Scan or a File in DnsTreeModel
 """
-from __future__ import (absolute_import, division, print_function)
 
 
-class DNSTreeItem(object):
+class DNSTreeItem:
     """
-    Custom Tree Item Class for DNS which is either a Scan or a File in DnsTreeModel
+    Custom Tree Item Class for DNS which is either a Scan
+    or a File in DnsTreeModel
     """
     def __init__(self, data, parent=None, checked=0):
         self.parent_item = parent
@@ -51,6 +51,24 @@ class DNSTreeItem(object):
                 return None
         else:
             return self.item_data
+
+    def get_sample(self):
+        if self.hasChildren():  # if its a scan get sample from first datafile
+            return self.child(0).data(5)
+        return self.data(5)
+
+    def get_sample_type(self):
+        sample = self.get_sample()
+        if 'vanadium' in sample or 'vana' in sample:
+            return 'vanadium'
+        if 'nicr' in sample or 'NiCr' in sample:
+            return 'nicr'
+        if 'empty' in sample or 'leer' in sample:
+            return 'empty'
+        return 'sample'
+
+    def is_type(self, sampletype):
+        return sampletype == self.get_sample_type()
 
     def hasChildren(self):
         return bool(self.childCount() > 0)

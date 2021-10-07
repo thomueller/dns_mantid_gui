@@ -6,5 +6,5 @@ Created on Thu Nov 14 15:33:37 2019
 """
 
 
-class DNSError(Exception):
+class DNSError(BaseException):
     pass

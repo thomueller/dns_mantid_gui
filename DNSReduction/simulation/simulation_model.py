@@ -1,6 +1,6 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
@@ -8,229 +8,233 @@
 Model for DNS simulation
 """
 
-from __future__ import (absolute_import, division, print_function)
-from numpy import tan, radians, pi, log, sqrt
+import mantidqtinterfaces.DNSReduction.simulation.simulation_helpers as sim_help
 import numpy as np
-
-from DNSReduction.data_structures.dns_obs_model import DNSObsModel
-from DNSReduction.simulation.sim_reflstruc import SimReflStruc
-import DNSReduction.simulation.simulation_helpers as sim_help
-
-from mantid.geometry import ReflectionGenerator
-from mantid.geometry import ReflectionConditionFilter, OrientedLattice
-from mantid.geometry import SpaceGroupFactory, CrystalStructure, UnitCell
-from mantid.simpleapi import LoadCIF, CreateWorkspace
+from mantidqtinterfaces.DNSReduction.data_structures.dns_obs_model import DNSObsModel
+from mantidqtinterfaces.DNSReduction.data_structures.object_dict import ObjectDict
+from mantidqtinterfaces.DNSReduction.helpers.converters import convert_hkl_string_to_float
+from mantid.geometry import (CrystalStructure, OrientedLattice,
+                             ReflectionConditionFilter, ReflectionGenerator,
+                             SpaceGroupFactory, UnitCell)
+from mantid.simpleapi import CreateWorkspace, LoadCIF
 
 
-def tth_to_q(tth, wavelength):
-    return np.pi * 4 * np.sin(tth / 2.0) / wavelength
-
-
-def tth_to_d(tth, wavelength):
-    return wavelength / (2 * np.sin(tth / 2.0))
-
-
-class DNSSimulation_model(DNSObsModel):
+class DNSSimulationModel(DNSObsModel):
     """
     Model for DNS simulation
 
     generates HKL list from CIF files or given lattice parameters and
     creates powder diffractogram and single crystal diffraction map
     """
+
     def __init__(self, parent):
-        super(DNSSimulation_model, self).__init__(parent)
-        self.sim_ws = None
-        self.orilat = None
-        self.refls = None
-        self.generator = None
-        self.cryst = None
-        self.non_rot_lat = None
+        super().__init__(parent)
+        self._sim_ws = None
+        self._orilat = None
+        self._refls = None
+        self._generator = None
+        self._cryst = None
+        self._non_rot_lat = None
 
-    def create_dns_surface(self, q1, q2):
-        tth_start = -self.own_dict['sc_det_start']
-        tth_end = -self.own_dict['sc_det_end'] + 23 * 5
-        omega_start = self.own_dict['sc_sam_start'] + tth_start
-        omega_end = self.own_dict['sc_sam_end'] + tth_start
-        wavelength = self.own_dict['wavelength']
-        tth_rang = np.linspace(tth_start, tth_end,
-                               int(abs((tth_end - tth_start))))
-        omega_rang = np.linspace(omega_start, omega_end,
-                                 int(abs(omega_end - omega_start)))
-        surface = sim_help.return_dns_surface_shape(self.orilat, tth_rang,
-                                                    omega_rang, q1, q2,
-                                                    wavelength)
-        return surface
-
-    def create_powder_profile(self, tth_start, tth_end, tth_step, shift):
-        u = 0.1791
-        v = -0.4503
-        w = 0.4
-        tth = np.arange(tth_start, tth_end, tth_step)
-        x = tth
-        y = tth * 0
-        for refl in self.refls:
-            shiftedtth = refl.tth + shift
-            FWHM = sqrt(u + v * tan(radians(shiftedtth) / 2.0) +
-                        w * tan(radians(shiftedtth) / 2.0)**2)
-            c = FWHM / (2 * sqrt(2 * log(2)))
-            peak = (1 / (c * sqrt(2 * pi)) * np.exp(-0.5 *
-                                                    ((x - shiftedtth) / c)**2))
-            y += refl.fs_lc * peak
-        bins = tth - tth_step / 2.0
-        bins = np.append(bins, tth[-1] + tth_step / 2.0)
-        CreateWorkspace(OutputWorkspace='mat_simulation',
-                        DataX=bins,
-                        DataY=y,
-                        NSpec=1,
-                        UnitX='Degrees')
-        return [x, y]
-
-    def filter_refls(self, refls):
-        inplane = self.own_dict['inplane']
-        unique = self.own_dict['unique']
+    @staticmethod
+    def filter_refls(refls, inplane, unique):
         if inplane and not unique:
-            refls = [refl for refl in refls if refl.inplane]
-        elif not inplane and unique:
-            refls = [refl for refl in refls if refl.unique]
-        elif inplane and unique:
-            newrefls = []
-            for refl in refls:
-                if refl.inplane:
-                    if not any(refl.hkl in nrefl.equivalents
-                               for nrefl in newrefls):
-                        newrefls.append(refl)
-            refls = newrefls
+            return sim_help.get_inplane_refl(refls)
+        if not inplane and unique:
+            return sim_help.get_unique_refl(refls)
+        if inplane and unique:
+            return sim_help.get_unique_inplane_refl(refls)
         return refls
 
-    def get_ds(self):
-        [d_hkl1, d_hkl2, d_hkl2_p] = self.generator.getDValues([
-            sim_help.listtoV3D(self.own_dict['hkl1_v']),
-            sim_help.listtoV3D(self.own_dict['hkl2_v']),
-            sim_help.listtoV3D(self.own_dict['hkl2_p_v'])
+    def get_ds(self, hkl1_v, hkl2_v, hkl2_p_v):
+        return self._generator.getDValues([
+            sim_help.list_to_v3d(hkl1_v),
+            sim_help.list_to_v3d(hkl2_v),
+            sim_help.list_to_v3d(hkl2_p_v)
         ])
-        return [d_hkl1, d_hkl2, d_hkl2_p]
 
     def get_hkl2_p(self):
-        q2_p = self.non_rot_lat.getvVector()
+        q2_p = self._non_rot_lat.getvVector()
         q2_p = q2_p / np.linalg.norm(q2_p)
         return q2_p
 
-    def get_refls_and_set_orientation(self):
-        q1 = self.own_dict['hkl1_v']
-        q2 = self.own_dict['hkl2_v']
-        self.refls = []
-        if self.own_dict['cifset'] is False:
-            self.setcellfromparameters()
-        wavelength = self.own_dict['wavelength']
-        self.orilat.setUFromVectors(sim_help.listtoV3D(q1),
-                                    sim_help.listtoV3D(q2))
-        self.non_rot_lat.setUFromVectors(sim_help.listtoV3D(q1),
-                                         sim_help.listtoV3D(q2))
-        self.generator = ReflectionGenerator(self.cryst)
+    def _set_lattice(self, q1, q2):
+        self._orilat.setUFromVectors(sim_help.list_to_v3d(q1),
+                                     sim_help.list_to_v3d(q2))
+        self._non_rot_lat.setUFromVectors(sim_help.list_to_v3d(q1),
+                                          sim_help.list_to_v3d(q2))
+
+    @staticmethod
+    def _get_refl_filter(cif_filename):
+        if not cif_filename:
+            return ReflectionConditionFilter.SpaceGroup
+        return ReflectionConditionFilter.StructureFactor
+
+    def _get_filtered_hkls(self, wavelength, cif_filename):
+        reffilter = self._get_refl_filter(cif_filename)
         maxq = sim_help.max_q(wavelength)
-        if not self.own_dict['cif_filename']:
-            reffilter = ReflectionConditionFilter.SpaceGroup
-        else:
-            reffilter = ReflectionConditionFilter.StructureFactor
-        hkls_unique = self.generator.getUniqueHKLsUsingFilter(
-            1 / maxq, 100, reffilter)  # dived by 2pi
-        hkls = self.generator.getHKLsUsingFilter(1 / maxq, 100,
-                                                 reffilter)  # dived by 2pi
-        dval = self.generator.getDValues(hkls)
-        qval = [2 * pi / d for d in dval]
-        fSquared = self.generator.getFsSquared(hkls)
-        pg = self.cryst.getSpaceGroup().getPointGroup()
-        UB = self.orilat.getUB()
-        if self.own_dict['fix_omega']:
-            UB = sim_help.rotate_UB(self.own_dict['omega_offset'], UB)
-            self.orilat.setUB(UB)
+        hkls_unique = self._generator.getUniqueHKLsUsingFilter(
+            1 / maxq, 100, reffilter)
+        hkls = self._generator.getHKLsUsingFilter(1 / maxq, 100, reffilter)
+        return [hkls, hkls_unique]
 
-        identify_tth = sim_help.det_rot_nmb_to_tth(self.own_dict['det_rot'],
-                                                   self.own_dict['det_number'])
+    def _get_q_d_val(self, hkls):
+        dval = self._generator.getDValues(hkls)
+        qval = [2 * np.pi / d for d in dval]
+        return [dval, qval]
 
+    def _get_ub(self, fix, omega_offset):
+        ub = self._orilat.getUB()
+        if fix:
+            ub = sim_help.rotate_ub(omega_offset, ub)
+            self._orilat.setUB(ub)
+        return ub
+
+    def get_refls_and_set_orientation(self, options):
+        q1 = options['hkl1_v']
+        q2 = options['hkl2_v']
+        wvl = options['wavelength']
+        cif_fn = options['cif_filename']
+        det_rot = options['det_rot']
+        det_nb = options['det_number']
+        fix_omega = options['fix_omega']
+        omega_offset = options['omega_offset']
+
+        self._setcellfromparameters(options)
+        self._set_lattice(q1, q2)
+        self._generator = ReflectionGenerator(self._cryst)
+        hkls, hkls_unique = self._get_filtered_hkls(wvl, cif_fn)
+        dval, qval = self._get_q_d_val(hkls)
+        f_squared = self._generator.getFsSquared(hkls)
+        pg = self._cryst.getSpaceGroup().getPointGroup()
+        ub = self._get_ub(fix_omega, omega_offset)
+        identify_tth = sim_help.det_rot_nmb_to_tth(det_rot, det_nb)
+        self._refls = []
         for i in range(len(hkls) - 1, 0, -1):
-            #reverse order to get positive hkl
-            refl = SimReflStruc()
+            # reverse order to get positive hkl
+            refl = ObjectDict()
             refl.hkl = hkls[i]
             refl.unique = refl.hkl in hkls_unique
             refl.q = qval[i]
-            refl.fs = fSquared[i]
+            refl.fs = f_squared[i]
             refl.d = dval[i]
-            refl.tth = sim_help.q_to_tth(refl.q, wavelength)
+            refl.tth = sim_help.q_to_tth(refl.q, wvl)
             refl.fs_lc = sim_help.lorentz_correction(refl.fs, refl.tth)
-            if not self.own_dict['cif_filename']:
+            if not cif_fn:
                 # if dummy scatterer set I = 1
                 refl.fs = 1
                 refl.fs_lc = 1
             refl.h = refl.hkl[0]
             refl.k = refl.hkl[1]
-            refl.l = refl.hkl[2]
+            refl.l = refl.hkl[2]  # noqa: E741, E743
             refl.equivalents = pg.getEquivalents(refl.hkl)
-            refl.M = len(refl.equivalents)
+            refl.mult = len(refl.equivalents)
             refl.diff = abs(identify_tth - refl.tth)
             refl.det_rot, refl.channel = sim_help.tth_to_rot_nmb(refl.tth)
             refl.inplane = sim_help.check_inplane(q1, q2, refl.hkl)
 
             refl.channel, refl.det_rot = sim_help.shift_channels_below_23(
                 refl.channel, refl.det_rot)
-            refl.omega = sim_help.hkl_to_omega(refl.hkl, UB, wavelength,
+            refl.omega = sim_help.hkl_to_omega(refl.hkl, ub, wvl,
                                                refl.tth)
             refl.sample_rot = sim_help.omega_to_samp_rot(
                 refl.omega, refl.det_rot)
-            self.refls.append(refl)
-        return self.refls
+            self._refls.append(refl)
+        return self._refls
 
-    def get_refls(self):
-        return self.refls
+    @staticmethod
+    def _create_sim_ws():
+        return CreateWorkspace(OutputWorkspace='__sim_ws',
+                               DataX=[0],
+                               DataY=[0],
+                               NSpec=1,
+                               UnitX='Degrees')
 
-    def loadCIF(self, fileName):
+    def get_orilat(self):
+        return self._orilat
+
+    def load_cif(self, fileName):
         """uses mantid to load CIF and set crystalstructure and oriented
         lattice, calls set unitcell"""
-        self.sim_ws = CreateWorkspace(OutputWorkspace='__sim_ws',
-                                      DataX=[0],
-                                      DataY=[0],
-                                      NSpec=1,
-                                      UnitX='Degrees')
-        LoadCIF(self.sim_ws, fileName)
-        self.cryst = self.sim_ws.sample().getCrystalStructure()
-        self.orilat = OrientedLattice(self.cryst.getUnitCell())
-        self.non_rot_lat = OrientedLattice(self.cryst.getUnitCell())
-        self.own_dict['a'] = self.cryst.getUnitCell().a()
-        self.own_dict['b'] = self.cryst.getUnitCell().b()
-        self.own_dict['c'] = self.cryst.getUnitCell().c()
-        self.own_dict['alpha'] = self.cryst.getUnitCell().alpha()
-        self.own_dict['beta'] = self.cryst.getUnitCell().beta()
-        self.own_dict['gamma'] = self.cryst.getUnitCell().gamma()
-        self.own_dict['spacegroup'] = self.cryst.getSpaceGroup().getHMSymbol()
-        return
+        self._sim_ws = self._create_sim_ws()
+        LoadCIF(self._sim_ws, fileName)
+        self._cryst = self._sim_ws.sample().getCrystalStructure()
+        unitcell = self._cryst.getUnitCell()
+        self._orilat = OrientedLattice(unitcell)
+        self._non_rot_lat = OrientedLattice(unitcell)
+        load_dict = {
+            'a': unitcell.a(),
+            'b': unitcell.b(),
+            'c': unitcell.c(),
+            'alpha': unitcell.alpha(),
+            'beta': unitcell.beta(),
+            'gamma': unitcell.gamma(),
+            'spacegroup': self._cryst.getSpaceGroup().getHMSymbol()
+        }
+        return load_dict
 
     def return_reflections_in_map(self, q1, q2, refls):
-        refls = sim_help.return_qx_qx_inplane_refl(self.orilat, q1, q2, refls)
+        refls = sim_help.return_qx_qx_inplane_refl(self._orilat, q1, q2, refls)
         return refls
 
-    def setcellfromparameters(self):
-        spacegroup = self.own_dict['spacegroup']
+    @staticmethod
+    def _get_hm_spacegroup(spacegroup):
         if spacegroup.isdigit():  # if user gives SG number convert to HM
             spacegroup = SpaceGroupFactory.subscribedSpaceGroupSymbols(
                 int(spacegroup))
-            spacegroup = spacegroup[0]
-            # number is not unique just use one rep.
-            self.presenter.set_spacegroup(spacegroup)
-        unitcell = UnitCell(self.own_dict['a'],
-                            self.own_dict['b'],
-                            self.own_dict['c'],
-                            self.own_dict['alpha'],
-                            self.own_dict['beta'],
-                            self.own_dict['gamma'],
-                            Unit=0)
-        orilat = OrientedLattice(unitcell)
-        self.non_rot_lat = OrientedLattice(unitcell)
-        cellstr = "{} {} {} {} {} {}".format(unitcell.a(), unitcell.b(),
-                                             unitcell.c(), unitcell.alpha(),
-                                             unitcell.beta(), unitcell.gamma())
-        if not self.own_dict['cif_filename']:
-            atomstr = "Si 0 0 1 1.0 0.01"  # dummy
-        else:
-            atomstr = ';'.join(self.cryst.getScatterers())
-        self.cryst = CrystalStructure(cellstr, spacegroup, atomstr)
-        self.orilat = orilat
+            spacegroup = spacegroup[0]  # HM is not unique for number
+        return spacegroup
+
+    def _get_atom_str(self, cif_filename):
+        if not cif_filename:
+            return "Si 0 0 1 1.0 0.01"  # dummy
+        return ';'.join(self._cryst.getScatterers())
+
+    @staticmethod
+    def _get_cell_str(unitcell):
+        return "{} {} {} {} {} {}".format(unitcell.a(), unitcell.b(),
+                                          unitcell.c(), unitcell.alpha(),
+                                          unitcell.beta(), unitcell.gamma())
+
+    def _setcellfromparameters(self, options):
+        spg = options['spacegroup']
+        a = options['a']
+        b = options['b']
+        c = options['c']
+        alpha = options['alpha']
+        beta = options['beta']
+        gamma = options['gamma']
+        if options['cifset']:
+            return
+        spacegroup = self._get_hm_spacegroup(spg)
+        unitcell = UnitCell(a, b, c, alpha, beta, gamma, Unit=0)
+        self._orilat = OrientedLattice(unitcell)
+        self._non_rot_lat = OrientedLattice(unitcell)
+        cellstr = self._get_cell_str(unitcell)
+        atomstr = self._get_atom_str(options['cif_filename'])
+        self._cryst = CrystalStructure(cellstr, spacegroup, atomstr)
+
+    @staticmethod
+    def get_ki(wavelength):
+        return sim_help.ki_from_wavelength(wavelength)
+
+    @staticmethod
+    def validate_hkl(hkl1, hkl2):
+        if hkl1[0] is None or hkl2[0] is None:
+            error = 'Could not parse hkl, enter 3 comma seperated numbers.'
+            return [False, error]
+        if (np.cross(hkl1, hkl2) == 0).all():
+            error = 'hkl1 cannot be paralell hkl2'
+            return [False, error]
+        return [True, '']
+
+    @staticmethod
+    def get_hkl_vector_dict(hkl1, hkl2):
+        return {
+            'hkl1_v': convert_hkl_string_to_float(hkl1),
+            'hkl2_v': convert_hkl_string_to_float(hkl2)
+        }
+
+    @staticmethod
+    def get_oof_from_ident(det_rot, sample_rot, id_sr, id_dr):
+        return (sample_rot - det_rot) - (id_sr - id_dr)

@@ -1,35 +1,46 @@
 # Mantid Repository : https://github.com/mantidproject/mantid
 #
-# Copyright &copy; 2019 ISIS Rutherford Appleton Laboratory UKRI,
+# Copyright &copy; 2021 ISIS Rutherford Appleton Laboratory UKRI,
 #     NScD Oak Ridge National Laboratory, European Spallation Source
 #     & Institut Laue - Langevin
 # SPDX - License - Identifier: GPL - 3.0 +
 """
 DNS XML dump view
 """
-from __future__ import (absolute_import, division, print_function)
+
+import platform
+import sys
+import time
+from collections import OrderedDict
 from os.path import expanduser
 
 from qtpy.QtWidgets import QFileDialog
 
-from DNSReduction.data_structures.dns_view import DNSView
+from mantidqtinterfaces.DNSReduction.data_structures.dns_view import DNSView
+
+# to get mantid version
+try:
+    from mantid.kernel import version_str
+    mantid_version = version_str()
+except (ImportError, ImportWarning):
+    mantid_version = None
 
 
-class DNSXMLDump_view(DNSView):
+class DNSXMLDumpView(DNSView):
     """
         Widget that lets user save or load data reduction xml files
     """
-    ## Widget name
-    name = "Paths"
+    # Widget name
+    name = "XmlDump"
+    HAS_TAB = False
 
     def __init__(self, parent):
-        super(DNSXMLDump_view, self).__init__(parent)
+        super(DNSXMLDumpView, self).__init__(parent)
         self.name = 'xml_dump'
-        self.xml_filepath = None
         self.main_view = parent
-        self.has_tab = False
+        self.setVisible(False)
 
-    def get_load_filename(self, startpath=expanduser("~")):
+    def open_load_filename(self, startpath=expanduser("~")):
         """
         Open a file dialog to load xml file
         """
@@ -39,12 +50,9 @@ class DNSXMLDump_view(DNSView):
             directory=startpath,
             filter="XML files (*.xml)",
             options=QFileDialog.DontUseNativeDialog)
-        if xml_filepath:
-            xml_filepath = xml_filepath[0]
-        self.xml_filepath = xml_filepath
-        return self.xml_filepath
+        return xml_filepath
 
-    def get_save_filename(self, startpath=expanduser("~")):
+    def open_save_filename(self, startpath=expanduser("~")):
         """
         Open a file dialog save xml file
         """
@@ -54,12 +62,16 @@ class DNSXMLDump_view(DNSView):
             directory=startpath,
             filter="XML files (*.xml)",
             options=QFileDialog.DontUseNativeDialog)
-        if xml_filepath:
-            xml_filepath = xml_filepath[0]
-        if not xml_filepath.lower().endswith('.xml'):
-            xml_filepath = ''.join([xml_filepath, '.xml'])
-        self.xml_filepath = xml_filepath
-        return self.xml_filepath
+        return xml_filepath
 
-    def get_xml_filepath(self):
-        return self.xml_filepath[0]
+    def get_file_header(self):
+        return OrderedDict([
+            ('instrument_name', 'DNS'),
+            ('facility_name', 'MLZ'),
+            ('timestamp_xml_save', time.ctime()),
+            ('python_version', sys.version),
+            ('platform', platform.system()),
+            ('architecture', str(platform.architecture())),
+            ('mantid_version', mantid_version),
+            ('within_mantid', self.within_mantid),
+        ])
